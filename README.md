@@ -14,16 +14,7 @@ Click to add the repository directly:
 
 [![Add to Mangayomi](https://img.shields.io/badge/Add%20to-Mangayomi-blue?style=for-the-badge)](https://intradeus.github.io/http-protocol-redirector?r=mangayomi://add-repo?repo_name=RandomUs3rInTh3Int3rn3t-extensions%26repo_url=https://github.com/RandomUs3rInTh3Int3rn3t/prod_extension2%26anime_url=https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/prod_extension2/main/anime_index.json)
 
-## Features
 
-- ✅ Browse popular anime
-- ✅ Browse latest updates
-- ✅ Search anime
-- ✅ View anime details and episodes
-- ✅ Stream videos (m3u8/mp4)
-- ✅ Sort by: Recent, Views, Rating, A-Z
-- ✅ Multi-server support
-- ✅ Sub/Dub selection
 
 ## Extension Development
 
