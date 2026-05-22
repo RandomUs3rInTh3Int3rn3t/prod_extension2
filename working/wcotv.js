@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.2",
+    "version": "0.0.3",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -136,21 +136,19 @@ class DefaultExtension extends MProvider {
         });
         const html = res.body;
 
-        let varName = "";
+        // --- Step 1: Decrypt the obfuscated JS array to get iframe src ---
         let arrayStr = "";
         let offset = 0;
 
-        const match = html.match(/var\s+(\w+)\s*=\s*\[([\s\S]*?)\]\s*;[\s\S]*?String\.fromCharCode\(parseInt\(atob\(\w+\)\.replace\(\/\\D\/g\s*,\s*['"]{2}\)\)\s*-\s*(\d+)\)/);
+        const match = html.match(/var\s+\w+\s*=\s*\[([\s\S]*?)\]\s*;[\s\S]*?String\.fromCharCode\(parseInt\(atob\(\w+\)\.replace\(\/\\D\/g\s*,\s*['"]{2}\)\)\s*-\s*(\d+)\)/);
         if (match) {
-            varName = match[1];
-            arrayStr = match[2];
-            offset = parseInt(match[3]);
+            arrayStr = match[1];
+            offset = parseInt(match[2]);
         } else {
-            const arrayMatch = html.match(/var\s+(\w+)\s*=\s*\[([\s\S]*?)\]\s*;/);
+            const arrayMatch = html.match(/var\s+\w+\s*=\s*\[([\s\S]*?)\]\s*;/);
             const offsetMatch = html.match(/-\s*(\d+)\);/);
             if (arrayMatch && offsetMatch) {
-                varName = arrayMatch[1];
-                arrayStr = arrayMatch[2];
+                arrayStr = arrayMatch[1];
                 offset = parseInt(offsetMatch[1]);
             }
         }
@@ -171,31 +169,71 @@ class DefaultExtension extends MProvider {
             }
         }
 
-        const iframeSrc = decryptedHtml.match(/<iframe[^>]+src="([^"]+)"/)?.[1];
+        const iframeSrc = decryptedHtml.match(/<iframe[^>]+src="([^"]+)"/) ?.[1];
         if (!iframeSrc) return [];
 
+        // --- Step 2: Load index.php to establish session, then fetch video-js.php ---
+        const indexUrl = iframeSrc;
         const videoJsUrl = iframeSrc.replace("index.php", "video-js.php");
+
+        // Warm up session by hitting index.php first (gets PHPSESSID cookie)
+        try {
+            await this.client.get(indexUrl, {
+                "Referer": cleanUrl,
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            });
+        } catch (e) {
+            // ignore, proceed anyway
+        }
+
         const playerRes = await this.client.get(videoJsUrl, {
             "Referer": cleanUrl,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         });
         const playerHtml = playerRes.body;
 
-        const apiMatch = playerHtml.match(/\$\.getJSON\s*\(\s*["']([^"']+)["']/);
-        if (!apiMatch) return [];
+        // --- Step 3: Extract getvidlink.php API URL ---
+        let apiUrl = null;
 
-        const apiPath = apiMatch[1];
-        const apiUrl = "https://embed.wcostream.com" + apiPath;
+        // Primary: extract from $.getJSON call in player script
+        const apiMatch = playerHtml.match(/\$\.getJSON\s*\(\s*["'`]([^"'`]+)["'`]/);
+        if (apiMatch) {
+            apiUrl = "https://embed.wcostream.com" + apiMatch[1];
+        }
 
-        const apiRes = await this.client.get(apiUrl, {
-            "Referer": videoJsUrl,
-            "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        });
+        // Fallback: construct API URL from iframe URL params
+        if (!apiUrl) {
+            try {
+                const iframeUrlObj = new URL(indexUrl);
+                const fileParam = iframeUrlObj.searchParams.get("file");
+                const embedParam = iframeUrlObj.searchParams.get("embed") || "neptun";
+                if (fileParam) {
+                    // Replace .flv with .mp4 as the API expects .mp4
+                    const mp4File = fileParam.replace(/\.flv$/i, ".mp4");
+                    apiUrl = `https://embed.wcostream.com/inc/embed/getvidlink.php?v=${embedParam}/${encodeURIComponent(mp4File)}&embed=${embedParam}`;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
 
-        const data = JSON.parse(apiRes.body);
-        const server = data.server || data.cdn;
+        if (!apiUrl) return [];
+
+        // --- Step 4: Fetch the video link JSON ---
+        let data = null;
+        try {
+            const apiRes = await this.client.get(apiUrl, {
+                "Referer": videoJsUrl,
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            });
+            data = JSON.parse(apiRes.body);
+        } catch (e) {
+            return [];
+        }
+
+        const server = (data.server || data.cdn || "").replace(/\\/g, "");
         if (!server) return [];
 
         const videos = [];
