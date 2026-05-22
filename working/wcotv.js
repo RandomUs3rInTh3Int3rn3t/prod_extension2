@@ -7,11 +7,11 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
-    "hasCloudflare": false,
+    "hasCloudflare": true,
     "sourceCodeUrl": "https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/prod_extension2/main/working/wcotv.js",
     "isFullData": false,
     "appMinVerReq": "0.5.0",
@@ -236,11 +236,14 @@ class DefaultExtension extends MProvider {
         const doc = new Document(html);
         const items = doc.select(selector);
         const anime = [];
+        const seen = new Set();
         for (const item of items) {
             const a = item.selectFirst(".recent-release-episodes a") || item.selectFirst("a");
             if (!a) continue;
             const href = this.cleanUrl(a.attr("href"));
             if (!href) continue;
+            if (seen.has(href)) continue;
+            seen.add(href);
             const name = a.text.trim();
             let imageUrl = item.selectFirst("img")?.attr("src") || "";
             imageUrl = this.cleanUrl(imageUrl);
@@ -260,9 +263,12 @@ class DefaultExtension extends MProvider {
         const doc = new Document(html);
         const items = doc.select(".ddmcc ul li a, .ddmcc li a, .series-list a");
         const anime = [];
+        const seen = new Set();
         for (const item of items) {
             const href = this.cleanUrl(item.attr("href"));
             if (!href) continue;
+            if (seen.has(href)) continue;
+            seen.add(href);
             const name = item.text.trim();
             anime.push({
                 name: name,
