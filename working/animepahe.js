@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.6",
+    "version": "0.0.8",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -31,20 +31,18 @@ class DefaultExtension extends MProvider {
 
     getHeaders() {
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": this.baseUrl + "/",
             "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-            "Cookie": "__ddg2_=; __ddg1_="
+            "X-Requested-With": "XMLHttpRequest"
         };
     }
 
     getPageHeaders() {
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": this.baseUrl + "/",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Cookie": "__ddg2_=; __ddg1_="
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         };
     }
 
