@@ -7,7 +7,8 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.1.0",
+    "version": "0.1.1",
+    "versionComment": "Fix jw-player base64 decoding regex & add plyr/vidstack player extractors",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -345,10 +346,11 @@ class DefaultExtension extends MProvider {
 
                 // ── ANIMO-M: jw-player/Rumble HLS extraction ──────────────────
                 if (streamUrl.includes("/jw-player/")) {
-                    var jwIdM = streamUrl.match(/\/jw-player\/([A-Za-z0-9+\/=]+)/);
+                    var jwIdM = streamUrl.match(/\/jw-player\/([A-Za-z0-9+\/=\-_]+)/);
                     if (jwIdM) {
                         try {
-                            var jwDecoded = this.decodeBase64(jwIdM[1]);
+                            var rawB64 = jwIdM[1].replace(/-/g, "+").replace(/_/g, "/");
+                            var jwDecoded = this.decodeBase64(rawB64);
                             var jwData = JSON.parse(jwDecoded);
                             var masterUrl = jwData.url || "";
                             if (masterUrl.startsWith("//")) masterUrl = "https:" + masterUrl;
@@ -396,6 +398,68 @@ class DefaultExtension extends MProvider {
                             }
                         } catch(e) {
                             console.log("AnimoTVSlash: jw-player parse error: " + e);
+                        }
+                    }
+                }
+
+                // ── ANIMO-H: plyr-player HLS extraction ──────────────────
+                if (streamUrl.includes("/plyr-player/")) {
+                    var plyrIdM = streamUrl.match(/\/plyr-player\/([A-Za-z0-9+\/=\-_]+)/);
+                    if (plyrIdM) {
+                        try {
+                            var rawB64 = plyrIdM[1].replace(/-/g, "+").replace(/_/g, "/");
+                            var plyrDecoded = this.decodeBase64(rawB64);
+                            var plyrData = JSON.parse(plyrDecoded);
+                            var playlistUrl = plyrData.url || "";
+                            if (playlistUrl) {
+                                if (playlistUrl.startsWith("//")) playlistUrl = "https:" + playlistUrl;
+                                videos.push({
+                                    url: playlistUrl,
+                                    originalUrl: playlistUrl,
+                                    quality: quality + " - HLS",
+                                    headers: { "Referer": streamUrl }
+                                });
+                                continue;
+                            }
+                        } catch(e) {
+                            console.log("AnimoTVSlash: plyr-player parse error: " + e);
+                        }
+                    }
+                }
+
+                // ── ANIMO-D: vidstack-player extraction ──────────────────
+                if (streamUrl.includes("/vidstack-player/")) {
+                    var vdsIdM = streamUrl.match(/\/vidstack-player\/([A-Za-z0-9+\/=\-_]+)/);
+                    if (vdsIdM) {
+                        try {
+                            var rawB64 = vdsIdM[1].replace(/-/g, "+").replace(/_/g, "/");
+                            var vdsDecoded = this.decodeBase64(rawB64);
+                            var vdsData = JSON.parse(vdsDecoded);
+                            var addedVds = false;
+                            var qualities = [
+                                { key: "url_1080", name: "1080p" },
+                                { key: "url_720", name: "720p" },
+                                { key: "url_480", name: "480p" },
+                                { key: "url_360", name: "360p" },
+                                { key: "url", name: "Default" }
+                            ];
+                            for (var i = 0; i < qualities.length; i++) {
+                                var q = qualities[i];
+                                var sUrl = vdsData[q.key] || "";
+                                if (sUrl) {
+                                    if (sUrl.startsWith("//")) sUrl = "https:" + sUrl;
+                                    videos.push({
+                                        url: sUrl,
+                                        originalUrl: sUrl,
+                                        quality: quality + " - " + q.name,
+                                        headers: { "Referer": streamUrl }
+                                    });
+                                    addedVds = true;
+                                }
+                            }
+                            if (addedVds) continue;
+                        } catch(e) {
+                            console.log("AnimoTVSlash: vidstack-player parse error: " + e);
                         }
                     }
                 }
