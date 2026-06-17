@@ -7,8 +7,8 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.1.1",
-    "versionComment": "Fix jw-player base64 decoding regex & add plyr/vidstack player extractors",
+    "version": "0.1.2",
+    "versionComment": "Fix episode list parsing for movies/series, remove strict slug filtering, and append HLS extension to Rumble cloud streams for media player compatibility.",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -252,34 +252,46 @@ class DefaultExtension extends MProvider {
                 else if (/ongoing|airing/i.test(html)) status = 0;
             }
 
-            // Extract anime slug for filtering
-            var animeSlugM = detailUrl.match(/\/anime\/([^\/]+)\/?$/);
-            var animeSlug  = animeSlugM ? animeSlugM[1] : "";
+            // Slice the eplister container block
+            var eplistIdx = html.search(/class=["'][^"']*eplister[^"']*["']/i);
+            if (eplistIdx !== -1) {
+                var tempBlock = html.slice(eplistIdx);
+                var endUlIdx = tempBlock.indexOf("</ul>");
+                var epBlock = endUlIdx !== -1 ? tempBlock.slice(0, endUlIdx + 5) : tempBlock;
 
-            // Slice from eplister block to avoid matching recommended/trending cards
-            var eplistIdx = html.indexOf('class="eplister"');
-            if (eplistIdx === -1) eplistIdx = html.indexOf("class='eplister'");
-            var epBlock = eplistIdx !== -1 ? html.slice(eplistIdx) : html;
+                var epRx = /<a[^>]+href=["'](https?:\/\/animotvslash\.org\/([^"' >]+))["'][^>]*>([\s\S]*?)<\/a>/gi;
+                var em, seenUrls = new Set();
+                while ((em = epRx.exec(epBlock)) !== null) {
+                    var epHref = em[1];
+                    var inner = em[3];
+                    if (seenUrls.has(epHref)) continue;
+                    seenUrls.add(epHref);
 
-            // Extract all episode hrefs
-            var epRx = /href=["'](https?:\/\/animotvslash\.org\/(([^"'\/]+-episode-(\d+))[^"'\/]*)\/?)["|']/gi;
-            var em, seenEps = new Set();
-            while ((em = epRx.exec(epBlock)) !== null) {
-                var epHref     = em[1];
-                var epFullSlug = em[2];
-                var epNum      = parseInt(em[4], 10);
-                if (isNaN(epNum) || seenEps.has(epNum)) continue;
-                if (animeSlug && !epFullSlug.startsWith(animeSlug + "-episode-")) continue;
-                seenEps.add(epNum);
-                chapters.push({ name: "Episode " + epNum, url: epHref });
+                    var numM = inner.match(/class=["']epl-num["'][^>]*>([^<]+)/i);
+                    var epLabel = numM ? numM[1].trim() : "";
+
+                    var chName = "Episode " + epLabel;
+                    if (epLabel.toLowerCase().includes("movie")) {
+                        chName = "Movie";
+                    } else if (epLabel.toLowerCase().includes("special")) {
+                        chName = "Special";
+                    } else if (!epLabel) {
+                        chName = "Episode " + (chapters.length + 1);
+                    }
+
+                    chapters.push({ name: chName, url: epHref });
+                }
+            } else {
+                // Movie or single watch page (e.g. no episode list container)
+                // Look for watchnow-btn link
+                var watchNowM = html.match(/class=["']watchnow-btn["'][^>]*href=["']([^"']+)["']/i) || 
+                                html.match(/href=["']([^"']+)["'][^>]*class=["']watchnow-btn["']/i);
+                if (watchNowM) {
+                    var movieUrl = watchNowM[1];
+                    if (movieUrl.startsWith("//")) movieUrl = "https:" + movieUrl;
+                    chapters.push({ name: "Movie", url: movieUrl });
+                }
             }
-
-            // Sort DESCENDING (newest first)
-            chapters.sort(function(a, b) {
-                var na = parseInt((a.url.match(/-episode-(\d+)/) || [0, 0])[1]);
-                var nb = parseInt((b.url.match(/-episode-(\d+)/) || [0, 0])[1]);
-                return nb - na;
-            });
 
             // Fallback: if eplister is empty, guess Episode 1
             if (chapters.length === 0) {
@@ -288,6 +300,13 @@ class DefaultExtension extends MProvider {
                     chapters.push({ name: "Episode 1", url: this.baseUrl + "/" + slugM[1] + "-episode-1/" });
                 }
             }
+
+            // Sort DESCENDING (newest first)
+            chapters.sort(function(a, b) {
+                var na = parseInt((a.url.match(/-episode-(\d+)/) || [0, 0])[1]);
+                var nb = parseInt((b.url.match(/-episode-(\d+)/) || [0, 0])[1]);
+                return nb - na;
+            });
 
         } catch(e) { console.log("AnimoTVSlash getDetail error: " + e); }
 
@@ -385,8 +404,9 @@ class DefaultExtension extends MProvider {
                                             var base = masterUrl.slice(0, masterUrl.lastIndexOf("/") + 1);
                                             sUrl = base + sUrl;
                                         }
+                                        var finalStreamUrl = sUrl + (sUrl.includes("?") ? "&" : "?") + "ext=.m3u8";
                                         videos.push({
-                                            url: sUrl,
+                                            url: finalStreamUrl,
                                             originalUrl: sUrl,
                                             quality: quality + " - " + q,
                                             headers: { "Referer": this.baseUrl + "/" }
