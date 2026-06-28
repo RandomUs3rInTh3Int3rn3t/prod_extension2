@@ -238,7 +238,7 @@ class DefaultExtension extends MProvider {
             }
 
             chapters.sort(function (a, b) {
-                return parseInt((a.url.split("||")[1] || "0"), 10) - parseInt((b.url.split("||")[1] || "0"), 10);
+                return parseInt((b.url.split("||")[1] || "0"), 10) - parseInt((a.url.split("||")[1] || "0"), 10);
             });
         } catch (e) {
             console.log("AniKoto getDetail error: " + e);
