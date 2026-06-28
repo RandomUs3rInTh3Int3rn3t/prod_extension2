@@ -27,30 +27,66 @@ class DefaultExtension extends MProvider {
         super();
         this.client = new Client();
         this.baseUrl = "https://animepahe.pw";
+        
+        // --- CLOUDFLARE COOKIE BYPASS SETTINGS ---
+        // You can paste your values directly here or input them in the extension preferences.
+        this.cfClearance = "m0XEMAh1WDXVmeVqNcl2pR5TkYxVbgGjW1ye5KtVNd8-1782639676-1.2.1.1-qqdxFLbCqJne6nftrmkT0yq2TMJiumciST29aboi9EeWflJyU5K8JhXUVH7uQtm1X4VmdNHR57QWVP29VPCqHk3Af6PgoP0ttwtAMjgWQaeeRyDS5DbgmIPGBxahyv4Kr.aqG3q5XNlz9ANeUjRMY3jjl07hU8MHX4t9yMeYIMcyM.chF6mqHtCtSDOWDNY8kk1oyhDeiyPBjBbz._ixX5BoJUkUI.SyXeUf9cW.jsUOzHD4XwnkjYnq6jJAZfSo.KJBQv1fN4.MMU2RVQ518jrutgLHMaC8UvKQa5IHNYMgMNy4u6_sybHQuHTzcI_jfby2Ll3l2Gzy7kHizzCG_HuAGl0DfkDiwwyWbS8KtPdLtBifyFPeIe7oJU6WbYoUUzrJwuOVSX4lI0YtK3lrS32ecZm2wUHczcg0h0HstqI3uYIB3Do_YieChVhe"; 
+        this.userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0";
+    }
+
+    async customGet(url, headers) {
+        // Fetch scraper pages/APIs directly to avoid Cloudflare Worker WAF blocks on animepahe.pw
+        return await this.client.get(url, headers);
+    }
+
+    proxyVideoUrl(m3u8) {
+        if (!m3u8) return "";
+        var workerProxy = new SharedPreferences().get("cf_worker_proxy") || "https://m3u8-cors-proxy.dito21525.workers.dev";
+        var baseProxy = workerProxy.trim().replace(/\/v2\/?$/, "").replace(/\/$/, "");
+        var videoHeaders = { "Referer": "https://kwik.cx/" };
+        return baseProxy + "/v2?url=" + encodeURIComponent(m3u8) + "&headers=" + encodeURIComponent(JSON.stringify(videoHeaders));
     }
 
     getHeaders() {
-        return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        var pref = new SharedPreferences();
+        var ua = pref.get("custom_user_agent") || this.userAgent;
+        var cf = pref.get("cf_clearance") || this.cfClearance;
+
+        var headers = {
+            "User-Agent": ua,
             "Referer": this.baseUrl + "/",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest"
         };
+
+        if (cf) {
+            headers["Cookie"] = "cf_clearance=" + cf;
+        }
+        return headers;
     }
 
     getPageHeaders() {
-        return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        var pref = new SharedPreferences();
+        var ua = pref.get("custom_user_agent") || this.userAgent;
+        var cf = pref.get("cf_clearance") || this.cfClearance;
+
+        var headers = {
+            "User-Agent": ua,
             "Referer": this.baseUrl + "/",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         };
+
+        if (cf) {
+            headers["Cookie"] = "cf_clearance=" + cf;
+        }
+        return headers;
     }
 
     // ── API helper ────────────────────────────────────────────────────────────
     async apiGet(params) {
         var url = this.baseUrl + "/api?" + params;
         console.log("API GET: " + url);
-        var res = await this.client.get(url, this.getHeaders());
+        var res = await this.customGet(url, this.getHeaders());
         if (res.statusCode !== 200) {
             console.log("API status: " + res.statusCode);
             throw new Error("API returned " + res.statusCode);
@@ -124,7 +160,7 @@ class DefaultExtension extends MProvider {
             var pageUrl = this.baseUrl + "/anime/" + animeSession;
 
             // Scrape the anime detail page for metadata
-            var res = await this.client.get(pageUrl, this.getPageHeaders());
+            var res = await this.customGet(pageUrl, this.getPageHeaders());
             var title = "";
             var imageUrl = "";
             var description = "";
@@ -284,7 +320,7 @@ class DefaultExtension extends MProvider {
 
     async extractKwikUrl(playPageUrl) {
         console.log("Fetching play page: " + playPageUrl);
-        var res = await this.client.get(playPageUrl, this.getPageHeaders());
+        var res = await this.customGet(playPageUrl, this.getPageHeaders());
         if (res.statusCode !== 200) {
             console.log("Play page status: " + res.statusCode);
             return [];
@@ -311,7 +347,7 @@ class DefaultExtension extends MProvider {
                         var m3u8 = await this.extractM3u8FromKwik(dataSrc);
                         if (m3u8) {
                             videos.push({
-                                url: m3u8,
+                                url: this.proxyVideoUrl(m3u8),
                                 originalUrl: m3u8,
                                 quality: qualityText || "Default",
                                 headers: { "Referer": "https://kwik.cx/" }
@@ -344,7 +380,7 @@ class DefaultExtension extends MProvider {
                     var m3u8 = await this.extractM3u8FromKwik(kwikUrl);
                     if (m3u8) {
                         videos.push({
-                            url: m3u8,
+                            url: this.proxyVideoUrl(m3u8),
                             originalUrl: m3u8,
                             quality: quality,
                             headers: { "Referer": "https://kwik.cx/" }
@@ -362,13 +398,15 @@ class DefaultExtension extends MProvider {
     async extractM3u8FromKwik(kwikUrl) {
         console.log("Fetching kwik: " + kwikUrl);
         try {
+            var pref = new SharedPreferences();
+            var ua = pref.get("custom_user_agent") || this.userAgent;
             var headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+                "User-Agent": ua,
                 "Referer": this.baseUrl + "/",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             };
 
-            var res = await this.client.get(kwikUrl, headers);
+            var res = await this.customGet(kwikUrl, headers);
             if (res.statusCode !== 200) {
                 console.log("Kwik status: " + res.statusCode);
                 return null;
@@ -457,7 +495,7 @@ class DefaultExtension extends MProvider {
                                 var m3u8 = await this.extractM3u8FromKwik(kwikUrl);
                                 if (m3u8) {
                                     videos.push({
-                                        url: m3u8,
+                                        url: this.proxyVideoUrl(m3u8),
                                         originalUrl: m3u8,
                                         quality: "AnimePahe [OK]" + quality,
                                         headers: { "Referer": "https://kwik.cx/" }
@@ -516,6 +554,36 @@ class DefaultExtension extends MProvider {
                     valueIndex: 0,
                     entries: ["Sub", "Dub"],
                     entryValues: ["sub", "dub"]
+                }
+            },
+            {
+                key: "cf_worker_proxy",
+                editTextPreference: {
+                    title: "Cloudflare Worker Proxy URL",
+                    summary: "Enter your Cloudflare Worker Proxy URL (e.g. https://your-worker.workers.dev)",
+                    value: "",
+                    dialogTitle: "Cloudflare Worker Proxy",
+                    dialogMessage: "Enter the base URL of your deployed m3u8CloudflareWorkerProxy (e.g., https://your-worker.workers.dev/)"
+                }
+            },
+            {
+                key: "cf_clearance",
+                editTextPreference: {
+                    title: "Cloudflare cf_clearance",
+                    summary: "Paste your cf_clearance cookie value here",
+                    value: "",
+                    dialogTitle: "cf_clearance cookie",
+                    dialogMessage: "Enter the cf_clearance cookie value from your web browser"
+                }
+            },
+            {
+                key: "custom_user_agent",
+                editTextPreference: {
+                    title: "Cloudflare User-Agent",
+                    summary: "Paste your web browser's User-Agent here",
+                    value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    dialogTitle: "User-Agent",
+                    dialogMessage: "Enter the exact User-Agent string of the browser where you solved the Cloudflare challenge"
                 }
             }
         ];

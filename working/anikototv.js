@@ -46,6 +46,14 @@ class DefaultExtension extends MProvider {
         };
     }
 
+    proxyVideoUrl(url, referer) {
+        if (!url) return "";
+        var workerProxy = new SharedPreferences().get("cf_worker_proxy") || "https://m3u8-cors-proxy.dito21525.workers.dev";
+        var baseProxy = workerProxy.trim().replace(/\/v2\/?$/, "").replace(/\/$/, "");
+        var videoHeaders = { "Referer": referer || (this.baseUrl + "/") };
+        return baseProxy + "/v2?url=" + encodeURIComponent(url) + "&headers=" + encodeURIComponent(JSON.stringify(videoHeaders));
+    }
+
     // ========================================================================
     // HTML Parsing - SSR pages contain full anime cards
     // Card structure: <a href="/watch/{slug}/ep-{n}"> <img src="{img}" alt="{title}">
@@ -406,7 +414,7 @@ class DefaultExtension extends MProvider {
                                         }
 
                                         var videoEntry = {
-                                            url: f,
+                                            url: this.proxyVideoUrl(f, hostBase + "/"),
                                             originalUrl: f,
                                             quality: (sourceList[sj].label || "Auto") + " - " + label,
                                             headers: { "Referer": hostBase + "/" }
@@ -448,7 +456,7 @@ class DefaultExtension extends MProvider {
                                             var af = apiSrc[ak].file || apiSrc[ak].url || "";
                                             if (af && (af.includes(".m3u8") || af.includes(".mp4"))) {
                                                 videos.push({
-                                                    url: af, originalUrl: af,
+                                                    url: this.proxyVideoUrl(af, hostBase + "/"), originalUrl: af,
                                                     quality: (apiSrc[ak].label || "Auto") + " - " + label,
                                                     headers: { "Referer": hostBase + "/" }
                                                 });
@@ -529,6 +537,16 @@ class DefaultExtension extends MProvider {
                     valueIndex: 0,
                     entries: ["Sub", "Dub"],
                     entryValues: ["sub", "dub"]
+                }
+            },
+            {
+                key: "cf_worker_proxy",
+                editTextPreference: {
+                    title: "Cloudflare Worker Proxy URL",
+                    summary: "Enter your Cloudflare Worker Proxy URL (e.g. https://your-worker.workers.dev)",
+                    value: "",
+                    dialogTitle: "Cloudflare Worker Proxy",
+                    dialogMessage: "Enter the base URL of your deployed m3u8CloudflareWorkerProxy (e.g., https://your-worker.workers.dev/)"
                 }
             }
         ];
