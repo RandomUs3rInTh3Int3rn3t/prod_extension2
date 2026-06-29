@@ -127,11 +127,12 @@ class DefaultExtension extends MProvider {
         var chapters = [];
         for (var ep of eps) {
             chapters.push({
-                name: ep.name || ("Episode " + ep.ep_num),
+                name: "Episode " + ep.ep_num + (ep.name ? (" - " + ep.name) : ""),
                 url: "https://animetsu.net/watch/" + id + "?ep=" + ep.ep_num,
                 dateUpload: ep.aired_at ? String(new Date(ep.aired_at).getTime()) : null
             });
         }
+        chapters.reverse();
 
         var status = 5; // Unknown
         if (info.status === "RELEASING") status = 0;
