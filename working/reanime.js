@@ -21,7 +21,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.2.1",
+    "version": "0.2.2",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
