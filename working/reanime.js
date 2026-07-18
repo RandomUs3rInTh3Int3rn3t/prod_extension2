@@ -26,14 +26,14 @@ const mangayomiSources = [{
     "dateFormatLocale": "",
     "isNsfw": false,
     "hasCloudflare": false,
-    "sourceCodeUrl": "https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/prod_extension2/main/working/reanime.js",
+    "sourceCodeUrl": "https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/mangayomi-extensionstet2/main/javascript/anime/src/en/working/reanime.js",
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 1,
     "id": 847291854,
     "notes": "ReAnime — rebuilt from scratch via Playwright network analysis",
-    "pkgPath": "working/reanime.js"
+    "pkgPath": "anime/src/en/working/reanime.js"
 }];
 
 // ─── Crypto Helpers ──────────────────────────────────────────────────────────
@@ -46,33 +46,63 @@ var _K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f
 0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,
 0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,
 0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,
-0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3];
+var W = new Uint32Array(64);
 
 function _sha256Bytes(b) {
-    var m = Array.from(b);
-    var bl = m.length * 8;
-    m.push(128);
-    while (m.length % 64 !== 56) m.push(0);
-    m.push(0,0,0,0,(bl>>>24)&255,(bl>>>16)&255,(bl>>>8)&255,bl&255);
-    var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
-    function rr(v,n){return(v>>>n)|(v<<(32-n));}
-    for (var o = 0; o < m.length; o += 64) {
-        var W = [];
-        for (var t = 0; t < 16; t++) W[t]=(m[o+t*4]<<24)|(m[o+t*4+1]<<16)|(m[o+t*4+2]<<8)|m[o+t*4+3];
-        for (var t = 16; t < 64; t++)
-            W[t]=(W[t-16]+(rr(W[t-15],7)^rr(W[t-15],18)^(W[t-15]>>>3))+W[t-7]+(rr(W[t-2],17)^rr(W[t-2],19)^(W[t-2]>>>10)))|0;
-        var a=H[0],b2=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
-        for (var t = 0; t < 64; t++) {
-            var t1=(h+(rr(e,6)^rr(e,11)^rr(e,25))+((e&f)^(~e&g))+_K[t]+W[t])|0;
-            var t2=((rr(a,2)^rr(a,13)^rr(a,22))+((a&b2)^(a&c)^(b2&c)))|0;
-            h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b2;b2=a;a=(t1+t2)|0;
+    var len = b.length;
+    var padLen = 64 * Math.ceil((len + 9) / 64);
+    var m = new Uint8Array(padLen);
+    m.set(b);
+    m[len] = 0x80;
+    
+    var bl = len * 8;
+    m[padLen - 4] = (bl >>> 24) & 255;
+    m[padLen - 3] = (bl >>> 16) & 255;
+    m[padLen - 2] = (bl >>> 8) & 255;
+    m[padLen - 1] = bl & 255;
+
+    var h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a,
+        h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+
+    for (var o = 0; o < padLen; o += 64) {
+        for (var t = 0; t < 16; t++) {
+            var idx = o + t * 4;
+            W[t] = (m[idx] << 24) | (m[idx + 1] << 16) | (m[idx + 2] << 8) | m[idx + 3];
         }
-        H[0]=(H[0]+a)|0;H[1]=(H[1]+b2)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;
-        H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+        for (var t = 16; t < 64; t++) {
+            var w15 = W[t - 15];
+            var w2 = W[t - 2];
+            var s0 = ((w15 >>> 7) | (w15 << 25)) ^ ((w15 >>> 18) | (w15 << 14)) ^ (w15 >>> 3);
+            var s1 = ((w2 >>> 17) | (w2 << 15)) ^ ((w2 >>> 19) | (w2 << 13)) ^ (w2 >>> 10);
+            W[t] = (W[t - 16] + s0 + W[t - 7] + s1) | 0;
+        }
+
+        var a = h0, b2 = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+        for (var t = 0; t < 64; t++) {
+            var s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+            var ch = (e & f) ^ (~e & g);
+            var t1 = (h + s1 + ch + _K[t] + W[t]) | 0;
+            var s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+            var maj = (a & b2) ^ (a & c) ^ (b2 & c);
+            var t2 = (s0 + maj) | 0;
+
+            h = g; g = f; f = e; e = (d + t1) | 0;
+            d = c; c = b2; b2 = a; a = (t1 + t2) | 0;
+        }
+        h0 = (h0 + a) | 0; h1 = (h1 + b2) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
+        h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
     }
-    var out=new Uint8Array(32);
-    for (var i=0;i<8;i++){out[i*4]=(H[i]>>>24)&255;out[i*4+1]=(H[i]>>>16)&255;out[i*4+2]=(H[i]>>>8)&255;out[i*4+3]=H[i]&255;}
+
+    var out = new Uint8Array(32);
+    out[0] = h0 >>> 24; out[1] = h0 >>> 16; out[2] = h0 >>> 8; out[3] = h0;
+    out[4] = h1 >>> 24; out[5] = h1 >>> 16; out[6] = h1 >>> 8; out[7] = h1;
+    out[8] = h2 >>> 24; out[9] = h2 >>> 16; out[10] = h2 >>> 8; out[11] = h2;
+    out[12] = h3 >>> 24; out[13] = h3 >>> 16; out[14] = h3 >>> 8; out[15] = h3;
+    out[16] = h4 >>> 24; out[17] = h4 >>> 16; out[18] = h4 >>> 8; out[19] = h4;
+    out[20] = h5 >>> 24; out[21] = h5 >>> 16; out[22] = h5 >>> 8; out[23] = h5;
+    out[24] = h6 >>> 24; out[25] = h6 >>> 16; out[26] = h6 >>> 8; out[27] = h6;
+    out[28] = h7 >>> 24; out[29] = h7 >>> 16; out[30] = h7 >>> 8; out[31] = h7;
     return out;
 }
 
@@ -119,31 +149,31 @@ function _xt(a){return((a<<1)^(a&128?27:0))&255;}
 function _ml(a,b){var r=0;for(var i=0;i<8;i++){if(b&1)r^=a;a=_xt(a);b>>=1;}return r;}
 
 function _aesDecryptCBC(ct,key,iv) {
-    var Nk=key.length/4,Nr=Nk+6,W=new Uint8Array(16*(Nr+1));
-    for(var i=0;i<key.length;i++)W[i]=key[i];
+    var Nk=key.length/4,Nr=Nk+6,W_aes=new Uint8Array(16*(Nr+1));
+    for(var i=0;i<key.length;i++)W_aes[i]=key[i];
     for(var i=Nk;i<4*(Nr+1);i++){
-        var t=[W[(i-1)*4],W[(i-1)*4+1],W[(i-1)*4+2],W[(i-1)*4+3]];
+        var t=[W_aes[(i-1)*4],W_aes[(i-1)*4+1],W_aes[(i-1)*4+2],W_aes[(i-1)*4+3]];
         if(i%Nk===0){var tmp=t[0];t[0]=_SB[t[1]]^_RC[i/Nk-1];t[1]=_SB[t[2]];t[2]=_SB[t[3]];t[3]=_SB[tmp];}
         else if(Nk>6&&i%Nk===4){for(var x=0;x<4;x++)t[x]=_SB[t[x]];}
-        W[i*4]=W[(i-Nk)*4]^t[0];W[i*4+1]=W[(i-Nk)*4+1]^t[1];
-        W[i*4+2]=W[(i-Nk)*4+2]^t[2];W[i*4+3]=W[(i-Nk)*4+3]^t[3];
+        W_aes[i*4]=W_aes[(i-Nk)*4]^t[0];W_aes[i*4+1]=W_aes[(i-Nk)*4+1]^t[1];
+        W_aes[i*4+2]=W_aes[(i-Nk)*4+2]^t[2];W_aes[i*4+3]=W_aes[(i-Nk)*4+3]^t[3];
     }
     var out=[],prev=iv;
     for(var off=0;off<ct.length;off+=16){
         var s=new Uint8Array(16);
-        for(var i=0;i<16;i++)s[i]=ct[off+i]^W[Nr*16+i];
+        for(var i=0;i<16;i++)s[i]=ct[off+i]^W_aes[Nr*16+i];
         for(var r=Nr-1;r>=0;r--){
             var tt=s[13];s[13]=s[9];s[9]=s[5];s[5]=s[1];s[1]=tt;
             tt=s[10];s[10]=s[2];s[2]=tt;tt=s[14];s[14]=s[6];s[6]=tt;
             tt=s[3];s[3]=s[7];s[7]=s[11];s[11]=s[15];s[15]=tt;
             for(var i=0;i<16;i++)s[i]=_ISB[s[i]];
-            for(var i=0;i<16;i++)s[i]^=W[r*16+i];
+            for(var i=0;i<16;i++)s[i]^=W_aes[r*16+i];
             if(r>0){
                 var ns=new Uint8Array(16);
                 for(var cc=0;cc<4;cc++){
                     var j=cc*4;
                     ns[j]=_ml(14,s[j])^_ml(11,s[j+1])^_ml(13,s[j+2])^_ml(9,s[j+3]);
-                    ns[j+1]=_ml(9,s[j])^_ml(14,s[j+1])^_ml(11,s[j+2])^_ml(13,s[j+3]);
+                    ns[j+1]=_ml(9,s[j])^_ml(14,s[j+1])^_ml(11,s[j+2])^_ml(9,s[j+3]);
                     ns[j+2]=_ml(13,s[j])^_ml(9,s[j+1])^_ml(14,s[j+2])^_ml(11,s[j+3]);
                     ns[j+3]=_ml(11,s[j])^_ml(13,s[j+1])^_ml(9,s[j+2])^_ml(14,s[j+3]);
                 }
@@ -159,29 +189,48 @@ function _aesDecryptCBC(ct,key,iv) {
     return out;
 }
 
-function _hmacSha256(k,m) {
-    if(k.length>64)k=_sha256Bytes(k);
-    var ip=new Uint8Array(64),op=new Uint8Array(64);
-    for(var i=0;i<64;i++){var kv=i<k.length?k[i]:0;ip[i]=kv^0x36;op[i]=kv^0x5c;}
-    var inn=new Uint8Array(64+m.length);inn.set(ip);inn.set(m,64);
-    var ih=_sha256Bytes(inn);
-    var ou=new Uint8Array(96);ou.set(op);ou.set(ih,64);
+var opt_ip = new Uint8Array(64);
+var opt_op = new Uint8Array(64);
+
+function _hmacSha256(k, m) {
+    var key = k;
+    if (key.length > 64) key = _sha256Bytes(key);
+    for (var i = 0; i < 64; i++) {
+        var kv = i < key.length ? key[i] : 0;
+        opt_ip[i] = kv ^ 0x36;
+        opt_op[i] = kv ^ 0x5c;
+    }
+    var inn = new Uint8Array(64 + m.length);
+    inn.set(opt_ip);
+    inn.set(m, 64);
+    var ih = _sha256Bytes(inn);
+    var ou = new Uint8Array(96);
+    ou.set(opt_op);
+    ou.set(ih, 64);
     return _sha256Bytes(ou);
 }
 
-function _pbkdf2Sha256(pw,salt,iter,dl) {
-    var r=new Uint8Array(dl);
-    for(var bk=1;bk<=Math.ceil(dl/32);bk++){
-        var sb=new Uint8Array(salt.length+4);
-        sb.set(salt);sb[salt.length]=(bk>>>24)&255;sb[salt.length+1]=(bk>>>16)&255;
-        sb[salt.length+2]=(bk>>>8)&255;sb[salt.length+3]=bk&255;
-        var u=_hmacSha256(pw,sb),ac=new Uint8Array(u);
-        for(var it=1;it<iter;it++){u=_hmacSha256(pw,u);for(var j=0;j<32;j++)ac[j]^=u[j];}
-        var off=(bk-1)*32;
-        for(var j=0;j<32&&off+j<dl;j++)r[off+j]=ac[j];
+function _pbkdf2Sha256(pw, salt, iter, dl) {
+    var r = new Uint8Array(dl);
+    var numBlocks = Math.ceil(dl / 32);
+    for (var bk = 1; bk <= numBlocks; bk++) {
+        var sb = new Uint8Array(salt.length + 4);
+        sb.set(salt);
+        sb[salt.length] = (bk >>> 24) & 255;
+        sb[salt.length + 1] = (bk >>> 16) & 255;
+        sb[salt.length + 2] = (bk >>> 8) & 255;
+        sb[salt.length + 3] = bk & 255;
+        var u = _hmacSha256(pw, sb);
+        var ac = new Uint8Array(u);
+        for (var it = 1; it < iter; it++) {
+            u = _hmacSha256(pw, u);
+            for (var j = 0; j < 32; j++) ac[j] ^= u[j];
+        }
+        var off = (bk - 1) * 32;
+        for (var j = 0; j < 32 && off + j < dl; j++) r[off + j] = ac[j];
     }
     return r;
-}
+};
 
 // Minimal WASM bytecode scrambler — interprets the w_payload from FlixCloud
 // to derive the third key fragment needed for AES decryption.
