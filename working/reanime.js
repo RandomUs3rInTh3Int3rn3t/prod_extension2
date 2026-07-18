@@ -26,14 +26,14 @@ const mangayomiSources = [{
     "dateFormatLocale": "",
     "isNsfw": false,
     "hasCloudflare": false,
-    "sourceCodeUrl": "https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/mangayomi-extensionstet2/main/javascript/anime/src/en/working/reanime.js",
+    "sourceCodeUrl": "https://raw.githubusercontent.com/RandomUs3rInTh3Int3rn3t/prod_extension2/main/working/reanime.js",
     "isFullData": false,
     "appMinVerReq": "0.5.0",
     "additionalParams": "",
     "sourceCodeLanguage": 1,
     "id": 847291854,
     "notes": "ReAnime — rebuilt from scratch via Playwright network analysis",
-    "pkgPath": "anime/src/en/working/reanime.js"
+    "pkgPath": "working/reanime.js"
 }];
 
 // ─── Crypto Helpers ──────────────────────────────────────────────────────────
