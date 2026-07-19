@@ -21,7 +21,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.2.2",
+    "version": "0.2.3",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -608,15 +608,17 @@ class DefaultExtension extends MProvider {
             var dataRes = await this.client.get(dataUrl, embedHeaders);
             if (dataRes.statusCode === 200) {
                 var svelteData = JSON.parse(dataRes.body);
-                // Find the data array in the nodes
-                var dataArray = null;
+                // Find the data array in the nodes containing the crypto seed
                 for (var n = 0; n < (svelteData.nodes || []).length; n++) {
                     var node = svelteData.nodes[n];
                     if (node && node.data && Array.isArray(node.data)) {
-                        dataArray = node.data;
+                        var candidate = this._unflatten(0, node.data);
+                        if (candidate && candidate.obfuscation_seed) {
+                            decoded = candidate;
+                            break;
+                        }
                     }
                 }
-                if (dataArray) decoded = this._unflatten(0, dataArray);
             }
         } catch (e) {
             console.log("[ReAnime] FlixCloud __data.json error: " + e);
