@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.3",
+    "version": "0.0.4",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -43,23 +43,6 @@ class DefaultExtension extends MProvider {
             if (val !== undefined && val !== null && val !== "") return val;
         } catch (e) {}
         return defaultValue;
-    }
-
-    proxyVideoUrl(url, referer) {
-        if (!url) return "";
-        var workerProxy = "https://m3u8-cors-proxy.dito21525.workers.dev";
-        try {
-            var pref = new SharedPreferences().get("cf_worker_proxy");
-            if (pref && typeof pref === "string" && pref.trim().length > 0) {
-                workerProxy = pref;
-            }
-        } catch (e) {}
-        var baseProxy = workerProxy.trim().replace(/\/v2\/?$/, "").replace(/\/$/, "");
-        var videoHeaders = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": referer || "https://megaplay.buzz/"
-        };
-        return baseProxy + "/v2?url=" + encodeURIComponent(url) + "&headers=" + encodeURIComponent(JSON.stringify(videoHeaders));
     }
 
     parseShowList(animeDataList) {
@@ -231,6 +214,7 @@ class DefaultExtension extends MProvider {
         if (!embedUrl || typeof embedUrl !== "string") return videos;
 
         try {
+            var proxyHost = "https://megacloud.animanga.fun";
             var embedHeaders = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Referer": "https://anikotoapi.site/"
@@ -284,8 +268,9 @@ class DefaultExtension extends MProvider {
             if (srcData.tracks && Array.isArray(srcData.tracks)) {
                 for (var track of srcData.tracks) {
                     if (track && track.file && (track.kind === "captions" || track.kind === "subtitles")) {
+                        var subProxyUrl = proxyHost + "/fetch?url=" + encodeURIComponent(track.file) + "&ref=" + encodeURIComponent("https://megaplay.buzz/");
                         subtitles.push({
-                            file: track.file,
+                            file: subProxyUrl,
                             label: track.label || "Unknown"
                         });
                     }
@@ -293,9 +278,14 @@ class DefaultExtension extends MProvider {
             }
 
             var streamHeaders = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://megaplay.buzz/",
-                "Origin": "https://megaplay.buzz"
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0",
+                "accept": "*/*",
+                "accept-language": "en-US,en;q=0.5",
+                "sec-fetch-dest": "empty",
+                "sec-fetch-mode": "cors",
+                "sec-fetch-site": "cross-site",
+                "origin": "https://megaplay.buzz",
+                "referer": "https://megaplay.buzz/"
             };
 
             for (var src of sourceList) {
@@ -303,27 +293,15 @@ class DefaultExtension extends MProvider {
                 var fileUrl = src.file || src.url || "";
                 if (fileUrl) {
                     var qualityTag = "AniKoto (" + labelType.toUpperCase() + ") - " + (src.label || "Auto");
-                    
-                    // Direct stream entry (preferred by native players mpv / ExoPlayer)
+                    var proxyUrl = proxyHost + "/proxy?url=" + encodeURIComponent(fileUrl) + "&headers=" + encodeURIComponent(JSON.stringify(streamHeaders));
+
                     videos.push({
-                        url: fileUrl,
+                        url: proxyUrl,
                         originalUrl: fileUrl,
                         quality: qualityTag,
                         subtitles: subtitles,
                         headers: streamHeaders
                     });
-
-                    // CORS Proxied stream entry (fallback for web / restricted environments)
-                    var proxiedUrl = this.proxyVideoUrl(fileUrl, "https://megaplay.buzz/");
-                    if (proxiedUrl && proxiedUrl !== fileUrl) {
-                        videos.push({
-                            url: proxiedUrl,
-                            originalUrl: fileUrl,
-                            quality: qualityTag + " (Proxy)",
-                            subtitles: subtitles,
-                            headers: streamHeaders
-                        });
-                    }
                 }
             }
         } catch (e) {
