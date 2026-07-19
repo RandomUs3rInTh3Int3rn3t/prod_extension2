@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.2",
+    "version": "0.0.3",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -294,7 +294,8 @@ class DefaultExtension extends MProvider {
 
             var streamHeaders = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://megaplay.buzz/"
+                "Referer": "https://megaplay.buzz/",
+                "Origin": "https://megaplay.buzz"
             };
 
             for (var src of sourceList) {
@@ -302,15 +303,27 @@ class DefaultExtension extends MProvider {
                 var fileUrl = src.file || src.url || "";
                 if (fileUrl) {
                     var qualityTag = "AniKoto (" + labelType.toUpperCase() + ") - " + (src.label || "Auto");
-                    var proxiedUrl = this.proxyVideoUrl(fileUrl, "https://megaplay.buzz/");
                     
+                    // Direct stream entry (preferred by native players mpv / ExoPlayer)
                     videos.push({
-                        url: proxiedUrl,
+                        url: fileUrl,
                         originalUrl: fileUrl,
                         quality: qualityTag,
                         subtitles: subtitles,
                         headers: streamHeaders
                     });
+
+                    // CORS Proxied stream entry (fallback for web / restricted environments)
+                    var proxiedUrl = this.proxyVideoUrl(fileUrl, "https://megaplay.buzz/");
+                    if (proxiedUrl && proxiedUrl !== fileUrl) {
+                        videos.push({
+                            url: proxiedUrl,
+                            originalUrl: fileUrl,
+                            quality: qualityTag + " (Proxy)",
+                            subtitles: subtitles,
+                            headers: streamHeaders
+                        });
+                    }
                 }
             }
         } catch (e) {
