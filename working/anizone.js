@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "dateFormat": "",
     "dateFormatLocale": "",
     "isNsfw": false,
@@ -56,7 +56,7 @@ class DefaultExtension extends MProvider {
             if (!linkEl) continue;
 
             var href = linkEl.attr("href") || "";
-            if (!href || !href.match(/\/anime\/[a-z0-9]+$/i)) continue;
+            if (!href || !href.match(/\/anime\/[a-z0-9\-_]+$/i)) continue;
 
             var title = "";
             var titleMatch = xData.match(/window\.getTitle\s*\([^,]+,\s*['"](.*?)['"]\s*\)/s);
@@ -176,25 +176,44 @@ class DefaultExtension extends MProvider {
             status = 0;
         }
 
-        var epSlugMatch = url.match(/\/anime\/([a-z0-9]+)/i);
+        var epSlugMatch = url.match(/\/anime\/([a-z0-9\-_]+)/i);
         var animeSlug = epSlugMatch ? epSlugMatch[1] : "";
 
-        var epEls = doc.select("a[href*=\"/anime/\"]");
         var chapters = [];
 
+        // 1. DOM element episode selection
+        var epEls = doc.select("a[href*=\"/anime/\"]");
         for (var ep of epEls) {
             var href = ep.attr("href") || "";
             var fullHref = href.startsWith("http") ? href : this.baseUrl + href;
 
-            var match = fullHref.match(new RegExp("/anime/" + animeSlug + "/(\\d+)", "i"));
-            if (match) {
-                var epNum = match[1];
-                var epName = "Episode " + epNum;
+            if (animeSlug) {
+                var match = fullHref.match(new RegExp("/anime/" + animeSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "/(\\d+)", "i"));
+                if (match) {
+                    var epNum = match[1];
+                    var epName = "Episode " + epNum;
 
-                if (chapters.findIndex(c => c.url === fullHref) === -1) {
+                    if (chapters.findIndex(c => c.url === fullHref) === -1) {
+                        chapters.push({
+                            name: epName,
+                            url: fullHref
+                        });
+                    }
+                }
+            }
+        }
+
+        // 2. Raw HTML regex fallback episode search
+        if (animeSlug) {
+            var rawEpRegex = new RegExp("/anime/" + animeSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "/(\\d+)", "gi");
+            var rawMatch;
+            while ((rawMatch = rawEpRegex.exec(fullText)) !== null) {
+                var fullEpHref = this.baseUrl + rawMatch[0];
+                var epNum = rawMatch[1];
+                if (chapters.findIndex(c => c.url === fullEpHref) === -1) {
                     chapters.push({
-                        name: epName,
-                        url: fullHref
+                        name: "Episode " + epNum,
+                        url: fullEpHref
                     });
                 }
             }
@@ -218,37 +237,98 @@ class DefaultExtension extends MProvider {
 
     async getVideoList(url) {
         var res = await this.client.get(url, this.getHeaders());
-        var doc = new Document(res.body);
+        var html = res.body;
+        var doc = new Document(html);
 
         var videos = [];
         var streamHeaders = this.getStreamHeaders();
 
+        // ── Extract Subtitles from <track> tags ──
+        var subtitles = [];
+
+        // 1. Raw HTML regex match for <track> tags (handles unquoted attributes like src=https://...)
+        var trackRegex = /<track\b[^>]*>/gi;
+        var match;
+        while ((match = trackRegex.exec(html)) !== null) {
+            var trackTag = match[0];
+
+            var kindMatch = trackTag.match(/kind=["']?([^"'\s>]+)["']?/i);
+            var kind = kindMatch ? kindMatch[1].toLowerCase() : "";
+            if (kind && kind !== "subtitles" && kind !== "captions") {
+                continue;
+            }
+
+            var srcMatch = trackTag.match(/src=["']?([^"'\s>]+)["']?/i);
+            var labelMatch = trackTag.match(/label=["']?([^"'>]+)["']?/i);
+            var langMatch = trackTag.match(/srclang=["']?([^"'\s>]+)["']?/i);
+
+            if (srcMatch) {
+                var file = srcMatch[1];
+                var label = labelMatch ? labelMatch[1].trim() : (langMatch ? langMatch[1].trim() : "Subtitle");
+
+                if (file && !subtitles.some(s => s.file === file)) {
+                    subtitles.push({
+                        file: file,
+                        label: label
+                    });
+                }
+            }
+        }
+
+        // 2. DOM select fallback for track elements
+        try {
+            var trackEls = doc.select("track");
+            for (var tr of trackEls) {
+                var trKind = (tr.attr("kind") || "").toLowerCase();
+                if (trKind && trKind !== "subtitles" && trKind !== "captions") continue;
+                var trSrc = tr.attr("src") || "";
+                var trLabel = tr.attr("label") || tr.attr("srclang") || "Subtitle";
+                if (trSrc && !subtitles.some(s => s.file === trSrc)) {
+                    subtitles.push({
+                        file: trSrc,
+                        label: trLabel.trim()
+                    });
+                }
+            }
+        } catch (e) {}
+
         // 1. Check <media-player src="..."> (Vidstack player)
         var playerEl = doc.selectFirst("media-player");
-        if (playerEl) {
-            var src = playerEl.attr("src") || "";
-            if (src) {
-                videos.push({
-                    url: src,
-                    originalUrl: src,
-                    quality: "Auto (m3u8)",
-                    headers: streamHeaders
-                });
+        var playerSrc = playerEl ? (playerEl.attr("src") || "") : "";
+        if (!playerSrc) {
+            var pMatch = html.match(/<media-player[^>]+src=["']?([^"'\s>]+)["']?/i);
+            if (pMatch) playerSrc = pMatch[1];
+        }
+
+        if (playerSrc) {
+            var vidObj = {
+                url: playerSrc,
+                originalUrl: playerSrc,
+                quality: "Auto (m3u8)",
+                headers: streamHeaders
+            };
+            if (subtitles.length > 0) {
+                vidObj.subtitles = subtitles;
             }
+            videos.push(vidObj);
         }
 
         // 2. Fallback: Check <video> or <source> tags
         if (videos.length === 0) {
-            var sourceEls = doc.select("video source, source[type*=video]");
+            var sourceEls = doc.select("video source, source[type*=video], video[src]");
             for (var srcEl of sourceEls) {
                 var videoUrl = srcEl.attr("src") || "";
                 if (videoUrl) {
-                    videos.push({
+                    var vidObj = {
                         url: videoUrl,
                         originalUrl: videoUrl,
                         quality: srcEl.attr("label") || "Default",
                         headers: streamHeaders
-                    });
+                    };
+                    if (subtitles.length > 0) {
+                        vidObj.subtitles = subtitles;
+                    }
+                    videos.push(vidObj);
                 }
             }
         }
@@ -259,12 +339,16 @@ class DefaultExtension extends MProvider {
             for (var iframe of iframes) {
                 var iframeSrc = iframe.attr("src") || "";
                 if (iframeSrc && !iframeSrc.includes("a-ads.com")) {
-                    videos.push({
+                    var vidObj = {
                         url: iframeSrc,
                         originalUrl: iframeSrc,
                         quality: "Embed Player",
                         headers: streamHeaders
-                    });
+                    };
+                    if (subtitles.length > 0) {
+                        vidObj.subtitles = subtitles;
+                    }
+                    videos.push(vidObj);
                 }
             }
         }
